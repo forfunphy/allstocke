@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { parseCSV, runBacktest, calculateBatchStats, getStockNameMap } from './utils/dataProcessor';
 import { generateMarketAnalysis } from './utils/aiService';
 import { StockData, TradeResult, BacktestStats } from './types';
-import { DEFAULT_CSV_DATA } from './constants';
+// DEFAULT_CSV_DATA removed to avoid bundle bloat
+
 import Dashboard from './components/Dashboard';
 import SettingsPanel from './components/SettingsPanel';
 import DataTable from './components/DataTable';
@@ -17,12 +18,12 @@ const App: React.FC = () => {
   const [fullDataset, setFullDataset] = useState<StockData[]>([]);
   const [selectedStockId, setSelectedStockId] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('single');
-  
+
   const [startYear, setStartYear] = useState<number>(2024);
   const [buyMonth, setBuyMonth] = useState<number>(1);
   const [sellMonth, setSellMonth] = useState<number>(12);
   const [fileName, setFileName] = useState<string>('預設資料 (台積電/聯發科)');
-  
+
   // AI Analysis State
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -32,19 +33,49 @@ const App: React.FC = () => {
     const staticMap = getStockNameMap();
     const dynamicMap: Record<string, string> = {};
     if (fullDataset.length > 0) {
-       for (const d of fullDataset) {
-          if (d.stockName && d.stockId && !dynamicMap[d.stockId]) {
-             dynamicMap[d.stockId] = d.stockName;
-          }
-       }
+      for (const d of fullDataset) {
+        if (d.stockName && d.stockId && !dynamicMap[d.stockId]) {
+          dynamicMap[d.stockId] = d.stockName;
+        }
+      }
     }
     return { ...staticMap, ...dynamicMap };
   }, [fullDataset]);
 
   // Load default data on mount
   useEffect(() => {
-    const data = parseCSV(DEFAULT_CSV_DATA);
-    handleNewData(data, '預設資料 (台積電/聯發科)');
+    const loadData = async () => {
+      try {
+        // Fetch manifest to get list of parts
+        const manifestRes = await fetch('/data_manifest.json');
+        if (!manifestRes.ok) throw new Error('Failed to load manifest');
+        const manifest = await manifestRes.json();
+
+        // Fetch all parts in parallel
+        const partsPromises = manifest.parts.map((partFile: string) =>
+          fetch(`/${partFile}`).then(res => res.json())
+        );
+
+        const parts = await Promise.all(partsPromises);
+
+        // Combine CSV data
+        let fullCsv = '';
+        for (const part of parts) {
+          if (part.csvData) {
+            fullCsv += part.csvData;
+          }
+        }
+
+        if (fullCsv) {
+          const parsed = parseCSV(fullCsv);
+          handleNewData(parsed, '預設資料 (台積電/聯發科)');
+        }
+      } catch (err) {
+        console.error("Failed to load data", err);
+      }
+    };
+
+    loadData();
   }, []);
 
   const handleNewData = (data: StockData[], name: string) => {
@@ -99,7 +130,7 @@ const App: React.FC = () => {
       const selectedName = stockMap[selectedStockId] || '';
       const displayFileName = `${fileName} (代碼: ${selectedStockId} ${selectedName})`;
       const result = await generateMarketAnalysis(
-        displayFileName, 
+        displayFileName,
         activeStockData,
         { startYear, buyMonth, sellMonth },
         stats,
@@ -133,8 +164,8 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex bg-slate-800 p-1 rounded-lg">
-             <button onClick={() => setViewMode('single')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'single' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}><LineChart className="w-4 h-4" />單一股票</button>
-             <button onClick={() => setViewMode('summary')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'summary' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}><LayoutGrid className="w-4 h-4" />全市場總覽</button>
+            <button onClick={() => setViewMode('single')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'single' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}><LineChart className="w-4 h-4" />單一股票</button>
+            <button onClick={() => setViewMode('summary')} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'summary' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}><LayoutGrid className="w-4 h-4" />全市場總覽</button>
           </div>
         </div>
       </header>
