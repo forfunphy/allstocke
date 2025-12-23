@@ -47,13 +47,13 @@ const App: React.FC = () => {
     const loadData = async () => {
       try {
         // Fetch manifest to get list of parts
-        const manifestRes = await fetch('/data_manifest.json');
+        const manifestRes = await fetch(`${import.meta.env.BASE_URL}data_manifest.json`);
         if (!manifestRes.ok) throw new Error('Failed to load manifest');
         const manifest = await manifestRes.json();
 
         // Fetch all parts in parallel
         const partsPromises = manifest.parts.map((partFile: string) =>
-          fetch(`/${partFile}`).then(res => res.json())
+          fetch(`${import.meta.env.BASE_URL}${partFile}`).then(res => res.json())
         );
 
         const parts = await Promise.all(partsPromises);
