@@ -1,12 +1,14 @@
 {
-  "name": "個股波段策略(3.0)(使用版)",
+  "name": "stock-strategy-client",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "homepage": "https://forfunphy.github.io/allstocke/",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint ."
   },
   "dependencies": {
     "react": "^19.2.0",
