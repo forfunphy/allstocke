@@ -1,38 +1,20 @@
-# Stock Strategy Client (個股波段策略)
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-這是一個基於 React 和 Vite 構建的股票策略分析工具。
+# Run and deploy your AI Studio app
 
-## 快速開始 (Getting Started)
+This contains everything you need to run your app locally.
 
-### 1. 安裝依賴
-```bash
-npm install
-```
+View your app in AI Studio: https://ai.studio/apps/drive/1ZLhnkEA1W3uSxOjEKOliw4PNwSR_W6Ra
 
-### 2. 環境變數設定 (選用)
-本專案可能需要 Google Gemini API Key。請在專案根目錄建立 `.env` 檔案（可參考 `.env.local`），並填入：
-```
-GEMINI_API_KEY=your_api_key_here
-```
+## Run Locally
 
-### 3. 啟動開發伺服器
-```bash
-npm run dev
-```
+**Prerequisites:**  Node.js
 
-### 4. 建置生產版本
-```bash
-npm run build
-```
 
-## 專案結構
-- `src/components`: UI 元件
-- `src/utils`: 工具函式
-- `src/constants.ts`: 常數設定
-- `public`: 靜態資源
-
-## 部署 (Deployment)
-本專案已設定 GitHub Actions 自動部署。
-1. 推送程式碼至 `main` 或 `master` 分支。
-2. 在 GitHub Repository 的 **Settings > Pages** 中，將 Source 設定為 `gh-pages` 分支 (第一次部署後會出現)。
-3. 部署完成後，即可透過 `<username>.github.io/<repo-name>` 訪問。
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

@@ -30,6 +30,7 @@ export interface BacktestStats {
   totalReturn: number;
   bestTrade: number;
   worstTrade: number;
+  sharpeRatio: number;
 }
 
 export interface StockSummary extends BacktestStats {

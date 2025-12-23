@@ -11,7 +11,7 @@ import {
   ReferenceLine,
   Cell
 } from 'recharts';
-import { TrendingUp, TrendingDown, Percent, DollarSign, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, Percent, Activity, ShieldAlert } from 'lucide-react';
 
 interface DashboardProps {
   stats: BacktestStats;
@@ -62,7 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, results }) => {
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatCard
           title="勝率"
           value={`${stats.winRate.toFixed(1)}%`}
@@ -75,6 +75,13 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, results }) => {
           value={`${stats.avgProfit.toFixed(2)}%`}
           icon={<Percent className="w-5 h-5 text-purple-400" />}
           trend={stats.avgProfit > 0 ? 'up' : 'down'}
+        />
+        <StatCard
+          title="夏普值"
+          value={stats.sharpeRatio.toFixed(2)}
+          icon={<ShieldAlert className="w-5 h-5 text-yellow-400" />}
+          subValue={stats.sharpeRatio > 1 ? "優秀" : stats.sharpeRatio > 0 ? "穩定" : "風險高"}
+          trend={stats.sharpeRatio > 0.5 ? 'up' : 'neutral'}
         />
         <StatCard
           title="最佳交易"

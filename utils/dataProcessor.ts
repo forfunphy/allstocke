@@ -87,65 +87,25 @@ export const parseCSV = (csvContent: string): StockData[] => {
   let lowIdx = findIdx(['low', '最低']);
   let closeIdx = findIdx(['close', '收盤']);
 
-  // Fallback logic if headers are not detected (e.g. no headers or unknown format)
+  // Fallback logic if headers are not detected
   if (dateIdx === -1 || openIdx === -1 || closeIdx === -1) {
     const sampleRow = lines.length > 1 ? splitCSVLine(lines[1]) : [];
-    
-    // Heuristic 1: Standard OHLC (5 columns) - Usually assumes Single Stock file without ID, or ID at 0
     if (sampleRow.length === 5) {
-      stockIdIdx = -1; 
-      nameIdx = -1;
+      stockIdIdx = -1; nameIdx = -1;
       dateIdx = 0; openIdx = 1; highIdx = 2; lowIdx = 3; closeIdx = 4;
-    } 
-    // Heuristic 2: User specified format or Extended format (>= 7 columns)
-    // Matches default format: date,code,name,open,high,low,close,volume
-    else if (sampleRow.length >= 7) {
+    } else if (sampleRow.length >= 7) {
       const col0 = sampleRow[0];
-      // Check if column 0 looks like a Date (YYYY/M/D or YYYY-M-D)
       const looksLikeDate = /^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/.test(col0);
-
       if (looksLikeDate) {
-        // New Format: 
-        // A(0): Date
-        // B(1): Code
-        // C(2): Name
-        // D(3): Open
-        // E(4): High
-        // F(5): Low
-        // G(6): Close
-        // H(7): Volume
-        dateIdx = 0;
-        stockIdIdx = 1;
-        nameIdx = 2; // Assuming name is at index 2 if structure matches
-        openIdx = 3;
-        highIdx = 4;
-        lowIdx = 5;
-        closeIdx = 6;
+        dateIdx = 0; stockIdIdx = 1; nameIdx = 2; openIdx = 3; highIdx = 4; lowIdx = 5; closeIdx = 6;
       } else {
-        // Previous Default Format or alternative:
-        // A(0): StockID
-        // B(1): Date
-        // ...
-        stockIdIdx = 0;
-        dateIdx = 1; 
-        openIdx = 3; 
-        highIdx = 4; 
-        lowIdx = 5; 
-        closeIdx = 6;
-        // nameIdx remains -1 unless found
+        stockIdIdx = 0; dateIdx = 1; openIdx = 3; highIdx = 4; lowIdx = 5; closeIdx = 6;
       }
     }
   }
 
-  // If we still didn't find stockIdIdx but have columns, default based on dateIdx
   if (stockIdIdx === -1 && lines[1] && splitCSVLine(lines[1]).length >= 6) {
-    // If Date is at 0, ID is likely at 1
-    if (dateIdx === 0) {
-      stockIdIdx = 1;
-    } else {
-      // Otherwise default to 0
-      stockIdIdx = 0;
-    }
+    dateIdx === 0 ? (stockIdIdx = 1) : (stockIdIdx = 0);
   }
 
   const data: StockData[] = [];
@@ -154,50 +114,29 @@ export const parseCSV = (csvContent: string): StockData[] => {
     return parseFloat(val.replace(/["',]/g, ''));
   };
 
-  // Start from line 1 (skip header)
   for (let i = 1; i < lines.length; i++) {
     const row = splitCSVLine(lines[i]);
     const requiredLen = Math.max(dateIdx, openIdx, highIdx, lowIdx, closeIdx);
-    
     if (row.length <= requiredLen) continue;
 
     const stockId = stockIdIdx !== -1 && row[stockIdIdx] ? row[stockIdIdx] : 'Unknown';
     const stockName = nameIdx !== -1 && row[nameIdx] ? row[nameIdx] : undefined;
-
     const dateStrRaw = row[dateIdx];
-    // Handle "2024/01/01 00:00" -> extract "2024/01/01"
     const dateStr = dateStrRaw ? dateStrRaw.split(' ')[0] : '';
-    
     const open = parseNumber(row[openIdx]);
     const high = parseNumber(row[highIdx]);
     const low = parseNumber(row[lowIdx]);
     const close = parseNumber(row[closeIdx]);
 
-    // Parse date YYYY/M/D or YYYY-M-D
     const dateParts = dateStr.split(/[\/\-]/);
     if (dateParts.length !== 3) continue;
 
-    const date = new Date(
-      parseInt(dateParts[0]),
-      parseInt(dateParts[1]) - 1, // Month is 0-indexed in JS Date
-      parseInt(dateParts[2])
-    );
-    
+    const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
     if (isNaN(date.getTime())) continue;
 
-    data.push({
-      stockId,
-      stockName,
-      date,
-      dateStr,
-      open,
-      high,
-      low,
-      close,
-    });
+    data.push({ stockId, stockName, date, dateStr, open, high, low, close });
   }
 
-  // Ensure chronological order
   return data.sort((a, b) => a.date.getTime() - b.date.getTime());
 };
 
@@ -205,10 +144,10 @@ export const runBacktest = (
   data: StockData[],
   startYear: number,
   buyMonth: number,
-  sellMonth: number
+  sellMonth: number,
+  stopLossPct: number = 0 // 0 means disabled
 ): { results: TradeResult[]; stats: BacktestStats } => {
   const results: TradeResult[] = [];
-  // Get unique years from data, but only those >= startYear
   const uniqueYears = new Set<number>();
   for(const d of data) {
     const y = d.date.getFullYear();
@@ -217,54 +156,69 @@ export const runBacktest = (
   const years = Array.from(uniqueYears).sort((a, b) => a - b);
 
   years.forEach((year) => {
-    // 1. Get all data for the buy month in the current year
     const buyMonthData = data.filter(
       (d) => d.date.getFullYear() === year && d.date.getMonth() + 1 === buyMonth
     );
 
     if (buyMonthData.length === 0) return;
-
-    // Buy Entry: First trading day of the month
     const buyEntry = buyMonthData[0];
+    const entryPrice = buyEntry.close;
 
-    // Determine Sell Year
-    // If sell month < buy month, sell next year.
-    // If sell month >= buy month, sell same year
     let sellYear = year;
     if (sellMonth < buyMonth) {
       sellYear = year + 1;
     }
 
-    // 2. Get all data for the sell month in the calculated sell year
-    const sellMonthData = data.filter(
-      (d) => d.date.getFullYear() === sellYear && d.date.getMonth() + 1 === sellMonth
-    );
+    // Get the range of data from buy date to target sell date
+    const holdingPeriodData = data.filter(d => {
+      const isAfterBuy = d.date.getTime() >= buyEntry.date.getTime();
+      const isBeforeOrInSellMonth = d.date.getFullYear() < sellYear || 
+        (d.date.getFullYear() === sellYear && d.date.getMonth() + 1 <= sellMonth);
+      return isAfterBuy && isBeforeOrInSellMonth;
+    });
 
-    if (sellMonthData.length === 0) return;
+    if (holdingPeriodData.length === 0) return;
 
-    // Sell Exit: Last trading day of the month
-    const sellExit = sellMonthData[sellMonthData.length - 1];
+    let sellDate = '';
+    let sellPrice = 0;
+    let isStopLossTriggered = false;
 
-    // Sanity check: Ensure sell date is after buy date
-    if (sellExit.date.getTime() <= buyEntry.date.getTime()) return;
+    // Stop Loss Check: Iterate through all days in the holding period
+    if (stopLossPct > 0) {
+      const stopLossPrice = entryPrice * (1 - stopLossPct / 100);
+      for (const dayData of holdingPeriodData) {
+        if (dayData.low <= stopLossPrice) {
+          sellDate = dayData.dateStr;
+          sellPrice = stopLossPrice;
+          isStopLossTriggered = true;
+          break;
+        }
+      }
+    }
 
-    // Use CLOSE price for both Entry and Exit
-    const buyPrice = buyEntry.close;
-    const sellPrice = sellExit.close;
+    // Normal Exit if stop loss wasn't triggered
+    if (!isStopLossTriggered) {
+      const sellMonthData = holdingPeriodData.filter(
+        d => d.date.getFullYear() === sellYear && d.date.getMonth() + 1 === sellMonth
+      );
+      if (sellMonthData.length === 0) return;
+      const sellExit = sellMonthData[sellMonthData.length - 1];
+      sellDate = sellExit.dateStr;
+      sellPrice = sellExit.close;
+    }
 
-    const profitPct = ((sellPrice - buyPrice) / buyPrice) * 100;
-    // Assume $10,000 investment per trade for absolute calculation
+    const profitPct = ((sellPrice - entryPrice) / entryPrice) * 100;
     const profitAbs = 10000 * (profitPct / 100); 
 
-    const diffTime = Math.abs(sellExit.date.getTime() - buyEntry.date.getTime());
+    const diffTime = Math.abs(new Date(sellDate).getTime() - buyEntry.date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
     results.push({
       year,
       buyDate: buyEntry.dateStr,
-      buyPrice: buyPrice,
-      sellDate: sellExit.dateStr,
-      sellPrice: sellPrice,
+      buyPrice: entryPrice,
+      sellDate,
+      sellPrice,
       profitPct,
       profitAbs,
       isWin: profitPct > 0,
@@ -272,29 +226,28 @@ export const runBacktest = (
     });
   });
 
-  // Calculate Stats
   const totalTrades = results.length;
   const wins = results.filter((r) => r.isWin).length;
   const losses = totalTrades - wins;
   const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
-  
   const totalReturn = results.reduce((acc, curr) => acc + curr.profitPct, 0);
   const avgProfit = totalTrades > 0 ? totalReturn / totalTrades : 0;
-
   const bestTrade = results.length > 0 ? Math.max(...results.map(r => r.profitPct)) : 0;
   const worstTrade = results.length > 0 ? Math.min(...results.map(r => r.profitPct)) : 0;
+
+  let sharpeRatio = 0;
+  if (results.length > 1) {
+    const returns = results.map(r => r.profitPct);
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+    sharpeRatio = stdDev !== 0 ? mean / stdDev : 0;
+  }
 
   return {
     results,
     stats: {
-      totalTrades,
-      wins,
-      losses,
-      winRate,
-      avgProfit,
-      totalReturn,
-      bestTrade,
-      worstTrade
+      totalTrades, wins, losses, winRate, avgProfit, totalReturn, bestTrade, worstTrade, sharpeRatio
     },
   };
 };
@@ -304,22 +257,17 @@ export const calculateBatchStats = (
   uniqueIds: string[],
   startYear: number,
   buyMonth: number,
-  sellMonth: number
+  sellMonth: number,
+  stopLossPct: number = 0
 ): StockSummary[] => {
-  // Get Full Metadata Mapping
   const staticMetadata = getStockMetadataMap();
-  
-  // Build Dynamic Map from current data
   const dynamicMap: Record<string, string> = {};
-
-  // Optimization: Group data by stockId in a single pass O(N)
   const groupedData: Record<string, StockData[]> = {};
   
   for (let i = 0; i < fullData.length; i++) {
     const item = fullData[i];
     if (!groupedData[item.stockId]) {
       groupedData[item.stockId] = [];
-      // If this item has a name and we haven't stored it yet, store it
       if (item.stockName && !dynamicMap[item.stockId]) {
         dynamicMap[item.stockId] = item.stockName;
       }
@@ -327,15 +275,12 @@ export const calculateBatchStats = (
     groupedData[item.stockId].push(item);
   }
 
-  // Use uniqueIds if provided to maintain order, otherwise keys
   const targetIds = uniqueIds.length > 0 ? uniqueIds : Object.keys(groupedData);
   
   return targetIds.map(id => {
     const stockData = groupedData[id] || [];
-    const { stats } = runBacktest(stockData, startYear, buyMonth, sellMonth);
-    
+    const { stats } = runBacktest(stockData, startYear, buyMonth, sellMonth, stopLossPct);
     const meta = staticMetadata[id];
-    // Prefer name from metadata, then dynamic map (from file), then empty
     const name = meta?.name || dynamicMap[id] || '';
 
     return {

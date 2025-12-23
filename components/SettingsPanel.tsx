@@ -1,6 +1,6 @@
 import React from 'react';
 import { Month } from '../types';
-import { Settings2 } from 'lucide-react';
+import { Settings2, ShieldOff } from 'lucide-react';
 
 interface SettingsPanelProps {
   buyMonth: number;
@@ -10,6 +10,8 @@ interface SettingsPanelProps {
   startYear: number;
   setStartYear: (y: number) => void;
   availableYears: number[];
+  stopLossPct: number;
+  setStopLossPct: (p: number) => void;
 }
 
 const CHINESE_MONTHS = [
@@ -25,6 +27,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   startYear,
   setStartYear,
   availableYears,
+  stopLossPct,
+  setStopLossPct
 }) => {
   const months = Object.values(Month).filter((v) => typeof v === 'number') as number[];
 
@@ -80,7 +84,33 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             ))}
           </select>
           <p className="text-xs text-slate-500 mt-2">
-            *若出場月份小於進場月份，系統將於隔年賣出。若月份相同，則持有至該月底。
+            *若出場月份小於進場月份，系統將於隔年賣出。
+          </p>
+        </div>
+
+        <div className="pt-4 border-t border-slate-700">
+          <div className="flex items-center justify-between mb-2">
+             <label className="text-sm font-medium text-slate-400 flex items-center gap-1.5">
+                <ShieldOff className="w-4 h-4 text-rose-400" />
+                強制停損比例 (%)
+             </label>
+             <span className="text-xs font-mono text-rose-400">{stopLossPct}%</span>
+          </div>
+          <input 
+             type="range"
+             min="0"
+             max="50"
+             step="1"
+             value={stopLossPct}
+             onChange={(e) => setStopLossPct(Number(e.target.value))}
+             className="w-full h-1.5 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-rose-500"
+          />
+          <div className="flex justify-between mt-1 text-[10px] text-slate-500 font-mono">
+             <span>0% (無)</span>
+             <span>50%</span>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-2 italic">
+            當持有期間最低價觸及此比例時，即以該價格強制賣出。
           </p>
         </div>
       </div>
